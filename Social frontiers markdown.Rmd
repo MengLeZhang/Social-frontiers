@@ -1,0 +1,240 @@
+---
+title: "Social frontiers Pardubice"
+author: "Meng Le Zhang"
+date: "13 August 2018"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+
+## Load packages and data
+library(tidyverse)
+library(sf)
+library(tmap)
+library(stargazer)
+
+tmap_mode('plot')
+
+##  Frontier data
+res.frontier1 <- readRDS('./Results/Pardubice frontiers all results A.RDS')
+res.frontier2 <- readRDS('./Results/Pardubice frontiers closer results A.RDS')
+res.frontier3 <- readRDS('./Results/Pardubice frontiers further results A.RDS')
+res.frontier4 <- readRDS('./Results/Pardubice frontiers permanent results A.RDS')
+res.frontier5 <- readRDS('./Results/Pardubice frontiers temporary results A.RDS')
+
+##  grid data
+res.grid1 <- readRDS('./Results/Pardubice frontiers all results B.RDS')
+res.grid2 <- readRDS('./Results/Pardubice frontiers closer results B.RDS')
+res.grid3 <- readRDS('./Results/Pardubice frontiers further results B.RDS')
+res.grid4 <- readRDS('./Results/Pardubice frontiers permanent results B.RDS')
+res.grid5 <- readRDS('./Results/Pardubice frontiers temporary results B.RDS')
+```
+
+## Introduction
+
+This is the analysis of social frontiers in Pardubice and the relationship 
+between crimes and frontiers. We use proportion of foreigners in 2011 and exclude
+Basic Settlement Units (BSUs) with less than 10 people residing in them. This is
+to exclude non-residential zones from the analysis (e.g. Pardubice hospital).
+
+### Frontiers using all types of foreigners 
+
+This gives us a total of 
+`r res.frontier1$data %>% nrow` 
+BSUs to in our dataset.
+First we look at statistically significant with a substantial difference in 
+proportions of all foreginers. This results in 
+`r res.frontier1$frontier.sf %>%subset(sig.frontier == T) %>% nrow`
+borders between BSUs classified as social frontiers (out of a possible 
+`r res.frontier1$frontier.sf %>% nrow`
+borders). The table below gives summary statistics comparing the absolute difference
+in crime between frontiers and non-frontiers. The p-value of the permutation test
+is 
+`r res.frontier1$pval %>% round(3)`.
+
+```{r tab1}
+aggregate(crime.diff ~ sig.frontier, data = res.frontier1$frontier.sf, summary) 
+
+```
+
+A map of the crime, social frontiers and proportion of foreigners is given below. 
+
+```{r fig1}
+tmap_mode('plot')
+
+tm_shape(res.frontier1$data) +
+  tm_fill('prop.foreign', alpha = 0.6, 
+          palette = 'Greens', 
+          style = 'cont',
+          breaks = c(0, 0.1, 0.2, 0.3, 1)) +
+qtm(res.frontier1$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Proportion of Foreigners and social frontiers') 
+
+tm_shape(res.frontier1$data) +
+  tm_fill('Prop_crimes_km2', alpha = 0.6, 
+          palette = 'Reds', 
+          style = 'quantile',
+          ) +
+qtm(res.frontier1$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Crime rate and social frontiers') 
+
+```
+
+### Analysis using closer and further cultural groups
+
+We repeat the analysis using the proportion of a) closer and b) further groups of
+foreigners by cultural distance. Using closer cultural groups we found 
+`r res.frontier2$frontier.sf %>%subset(sig.frontier == T) %>% nrow`
+social frontiers. The table below gives summary statistics comparing the absolute difference
+in crime between frontiers and non-frontiers. The p-value of the permutation test
+is 
+`r res.frontier2$pval %>% round(3)`.
+
+Using further cultural groups we found 
+`r res.frontier3$frontier.sf %>%subset(sig.frontier == T) %>% nrow`
+social frontiers. The table below gives summary statistics comparing the absolute difference
+in crime between frontiers and non-frontiers. The p-value of the permutation test
+is 
+`r res.frontier3$pval %>% round(3)`.
+
+```{r fig2}
+tmap_mode('plot')
+
+tm_shape(res.frontier2$data) +
+  tm_fill('prop.foreign', alpha = 0.6, 
+          palette = 'Greens', 
+          style = 'cont',
+          breaks = c(0, 0.1, 0.2, 0.3, 1)) +
+qtm(res.frontier2$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Proportion of Closer Foreigners and social frontiers') 
+
+tm_shape(res.frontier2$data) +
+  tm_fill('Prop_crimes_km2', alpha = 0.6, 
+          palette = 'Reds', 
+          style = 'quantile'
+          ) +
+qtm(res.frontier2$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Crime rate and social frontiers (closer)') 
+
+tm_shape(res.frontier3$data) +
+  tm_fill('prop.foreign', alpha = 0.6, 
+          palette = 'Greens', 
+          style = 'cont',
+          breaks = c(0, 0.1, 0.2, 0.3, 1)) +
+qtm(res.frontier3$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Proportion of Further Foreigners and social frontiers') 
+
+tm_shape(res.frontier3$data) +
+  tm_fill('Prop_crimes_km2', alpha = 0.6, 
+          palette = 'Reds', 
+          style = 'quantile',
+          ) +
+qtm(res.frontier3$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Crime rate and social frontiers (further)') 
+
+
+```
+
+### Analysis using permanent and temporary cultural groups
+
+We repeat the analysis using the proportion of a) permanent and b) temporary groups of
+foreigners by cultural distance. Using permanent cultural groups we found 
+`r res.frontier4$frontier.sf %>%subset(sig.frontier == T) %>% nrow`
+social frontiers. The table below gives summary statistics comparing the absolute difference
+in crime between frontiers and non-frontiers. The p-value of the permutation test
+is 
+`r res.frontier4$pval %>% round(3)`.
+
+Using temporary cultural groups we found 
+`r res.frontier5$frontier.sf %>%subset(sig.frontier == T) %>% nrow`
+social frontiers. The table below gives summary statistics comparing the absolute difference
+in crime between frontiers and non-frontiers. The p-value of the permutation test
+is 
+`r res.frontier5$pval %>% round(3)`.
+
+```{r fig3}
+tm_shape(res.frontier4$data) +
+  tm_fill('prop.foreign', alpha = 0.6, 
+          palette = 'Greens', 
+          style = 'cont',
+          breaks = c(0, 0.1, 0.2, 0.3, 1)) +
+  qtm(res.frontier4$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Proportion of permanent Foreigners and social frontiers') 
+
+tm_shape(res.frontier4$data) +
+  tm_fill('Prop_crimes_km2', alpha = 0.6, 
+          palette = 'Reds', 
+          style = 'quantile'
+  ) +
+  qtm(res.frontier4$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Crime rate and social frontiers (permanent)') 
+
+tm_shape(res.frontier5$data) +
+  tm_fill('prop.foreign', alpha = 0.6, 
+          palette = 'Greens', 
+          style = 'cont',
+          breaks = c(0, 0.1, 0.2, 0.3, 1)) +
+  qtm(res.frontier5$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Proportion of temporary Foreigners and social frontiers') 
+
+tm_shape(res.frontier5$data) +
+  tm_fill('Prop_crimes_km2', alpha = 0.6, 
+          palette = 'Reds', 
+          style = 'quantile',
+  ) +
+  qtm(res.frontier5$frontier.gfx %>% subset(sig.frontier == T)) +
+  tm_scale_bar(position = c('center', 'bottom')) +
+  tm_layout(title = 'Crime rate and social frontiers (temporary)') 
+
+
+```
+
+### Grid square analysis
+
+A further analysis of within BSU crimes was conducted using 100m by 100m grid squares.
+The total crimes per grid square was the dependent variable in
+a fixed effect quasi-poisson model with BSUs as the fixed effect.
+Dummy variables were included for whether a BSU was a) within 100m
+of a frontier and b) within 200m of a frontier. The parameter
+value for the first variable tells us the difference in crime between grids within
+100m of  frontier compared to non-frontiers. The second parameter tells us the
+difference in crimes between grids that within 100m and those within 200m.
+
+
+```{r Poisson FE}
+stargazer(res.grid1$model,
+          res.grid2$model,
+          res.grid3$model,
+          res.grid4$model,
+          res.grid5$model,
+          type = 'text',
+          keep = 'frontier',
+           title = 'FE model results',
+          column.labels = c('All', 'Closer', 'Further'),
+           dep.var.labels = 'Total crime with a grid',
+          
+           no.space = T
+)
+
+```
+We find that crime rates are lower in grids with 100m of frontiers calculated 
+using all foreigners and closer foreign groups. We believe that this is due to
+a outliers in the data rather than a genuine effect as the exclusion of a key 
+BSU substantially changes the effect to non-significance. Overall we do not believe
+that crimes are any greater or lower in grid squares near social frontiers.
