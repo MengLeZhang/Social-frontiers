@@ -8,7 +8,8 @@ threshold <- 1.96 #threshold is basically how many standard deviation above the 
 ##  Phi is a statistic related to proportion of foreigners created by the model
 
 ##  Load in data. This shapefile assembled in 'sf creation.R'
-merged.sf <- st_read('Data/londonlsoas_nonclipped_nongeneralised_w_nonUK_cob.shp')
+#merged.sf <- st_read('Data/londonlsoas_nonclipped_nongeneralised_w_nonUK_cob.shp')
+merged.sf <- readRDS('Data/londondata_LSOA.rds')
 
 ##  Test 1: The basic foreign only ----
 

@@ -31,6 +31,8 @@ permutation.test <- function(variates,
   
   for(i in 1:iter){
     
+    print(i) 
+    
     x.perm <- sample(x,n,replace=FALSE)
     
     x.perm.diff.matrix <- outer(x.perm,x.perm,FUN="-")

@@ -58,19 +58,31 @@ mod.inla <- binomial.localisedINLA(
 
 proc.time() - x
 
+W.estimated <- mod.inla$W.estimated #extract estimated matrix
+# So basically we are putting NAs where there was no neighbour in the original
+# W matrix. Remainder are geographical neighbours with 0s and 1s denoting
+# sig correlation or not
+W.estimated[W == 0] <- NA ## Put NAs where there was orginally not a border
+
+
+
+
 # Everything after the model is run is extracting the right stats
 ##  This bit isn't essentialt it's just error checking
 # W is the original neighbour continguity matrix
 # mod.inla$W.estimated is the model estimated matrix
 W %>% table/2 ## Divide by two as matrix is symmetric, counts neighbours twice
-W.estimated <- mod.inla$W.estimated #extract estimated matrix
 W.estimated %>% table/2 ## Number estimated 1s (i.e. stat sig frontiers)
 
-# So basically we are putting NAs where there was no neighbour in the original
-# W matrix. Remainder are geographical neighbours with 0s and 1s denoting
-# sig correlation or not
-W.estimated[W == 0] <- NA ## Put NAs where there was orginally not a border
 W.estimated %>% table(useNA = 'always') # mroe tables NA = no geo neighbour
+
+table(W)/2#unique neighbour pairs = 16978
+#Check W.estimated has equal number of 1s and 0s to W's 1s.
+table(W.estimated %in% c(0,1))/2#Tick.
+table(mod.inla$W.estimated, useNA = 'always')
+table(W.estimated, useNA = 'always')
+
+
 
 ##  Extract the estimated random effects which tells us how much the BSU departs
 ##  from the average prop of foreigners
@@ -85,7 +97,7 @@ merged.sf$mod_phi <- phi
 
 upper.w.est <- W.estimated
 upper.w.est[lower.tri(upper.w.est, diag = T)] <- NA ## gets rid of the upper part of the sym. matrix
-upper.w.est %>% head
+#upper.w.est %>% head
 
 # Now we want to find the pairs where there are 0 (frontiers) and 1 (non-frontier) in the estimated
 # inla matrix. = 
@@ -97,18 +109,110 @@ w.index1 <-
   which(upper.w.est == 1, arr.ind = T) %>% 
   data.frame(frontier = F) # finds non-NA values (which row and col) and arr.ind returns it as a matrix
 
+#One row for every unique neighbour pair, saying where frontier or not
 w.index <- w.index0 %>% rbind(w.index1) # I want all the indicies for social frontiers and non-frontiers in
 ## one data.frame
 w.index %>% head 
 
+
+#Attempt 2, create dataframe directly
+#rbind playing up for large list
+merged.sf.for.borders <- merged.sf %>% 
+  select(LSOA,percentunemployed,crimesperperson,mod_phi)
+
+
+#Avoiding the 2nd circle of growing df hell
+#https://stackoverflow.com/questions/14693956/how-can-i-prevent-rbind-from-geting-really-slow-as-dataframe-grows-larger
+#rbind becomes hugely slow as df grows.
+#Pre-create it and update directly
+
+#Cheat: get column names from single intersect operation
+fornames <- merged.sf.for.borders[w.index$col[1],] %>% st_intersection(merged.sf.for.borders[w.index$col[1],]) # now we are intersecting polys to get borders
+
+#Create df of correct size with those names
+borders.sf <- data.frame(id = 1:nrow(w.index))
+
+#Fills with single value but now we have correct column types and rows
+for(i in names(fornames)){
+  borders.sf[,i] <- fornames[,i]
+}
+
+borders.sf <- borders.sf %>% select(-id)
+borders.sf <- st_as_sf(borders.sf)
+
+#Column for frontier flag
+#borders.sf$frontier <- F
+
+
+x <- proc.time()
+
+for (i in 1:nrow(w.index)) {
+  #i <- 1 # for testing
+  zone1 <- w.index$col[i]
+  zone2 <- w.index$row[i]
+  
+  borders.sf[i,] <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+  #borders.sf$frontier[i] <- w.index$frontier[i]
+  
+  if(i %% 10 == 0){
+    print(i)
+  }
+  
+}
+
+#40 mins. Whut??
+proc.time() - x
+
+#Add frontier flag
+borders.sf$frontier <- w.index$frontier
+
+
+
+#Growing version
+x <- proc.time()
+
+for (i in 1:nrow(w.index)) {
+  #i <- 1 # for testing
+  zone1 <- w.index$col[i]
+  zone2 <- w.index$row[i]
+  
+  #First row becomes sf dataframe we'll rbind to.
+  if(i==1){
+    borders.sf <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+    borders.sf$frontier <- w.index$frontier[i]
+  } else {
+    temp <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+    temp$frontier <- w.index$frontier[i]
+    borders.sf <- rbind(borders.sf,temp)
+  }
+  
+  if(i %% 10 == 0){
+    print(i)
+  }
+  
+  
+}
+
+proc.time() - x
+
+
+
+
+
+
 # now a for loop to basically create intersections for pairs of polygons
 # who are neighbours and say if they are frontier or not
 borders.sf <- list()#Start empty...
+
+#Reduce merged.sf field numbers to reduce border file size.
+merged.sf.for.borders <- merged.sf %>% 
+  select(LSOA,percentunemployed,crimesperperson,mod_phi)
+
 for (i in 1:nrow(w.index)) {
   #i <- 1 # for testing
-  bsu1 <- w.index$col[i]
-  bsu2 <- w.index$row[i]
-  temp <- merged.sf[bsu1,] %>% st_intersection(merged.sf[bsu2,]) # now we are intersecting polys to get borders
+  zone1 <- w.index$col[i]
+  zone2 <- w.index$row[i]
+  temp <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
   
   #Don't use empty intersections. Slight hack...
   # if(nrow(temp)!=0){
@@ -121,24 +225,32 @@ for (i in 1:nrow(w.index)) {
   
 }
 #warnings() ##  ignore warnings about if about attributes etc
+# x <- proc.time()
+# borders.sf.df <- do.call(rbind, borders.sf)
+# proc.time() - x
 
-#There's one null in there.
-# x = list()
-# for(i in borders.sf) x[[length(x)+1]] = class(i)
-# table(unlist(x))
-# #Which has null in? Oh, first. That was just borders.sf <- list(NULL) creating single NULL entry at [[1]]
-# for(i in borders.sf) print(which(class(i)=='NULL'))
-
-
-
-borders.sf <- do.call(rbind, borders.sf)
 borders.sf$geometry %>% summary # not that it's not all proper lines
 borders.sf %>% head
 # end of making border.sf object that contains borders only for graphs etc
 
 #Save that and the INLA run
-saveRDS(borders.sf,'Data/local/london_borders_sf1.rds')
+saveRDS(borders.sf,'Data/local/london_borders_sf2.rds')
 saveRDS(mod.inla,'Data/local/london_inlarun1.rds')
+
+borders.sf <- readRDS('Data/local/london_borders_sf2.rds')
+mod.inla <- readRDS('Data/local/london_inlarun1.rds')
+
+#One border per neighbour pair?
+#I think there should be 16978 neighbour pairs...
+summary(W.nb)
+
+#No? Hmm, something about row and column names...
+#isSymmetric(W)
+library(matrixcalc)
+is.symmetric.matrix(W)#Yes
+is.symmetric.matrix(mod.inla$W.estimated)#Yes. Doesn't work if NAs present.
+
+
 
 
 #We seem to have many polygons in here...?
@@ -165,8 +277,8 @@ borders.sf$abs_phi_scaled <-
 borders.sf$abs_phi_rank <-
   borders.sf$abs_phi %>% order ## scaled and centred
 
- #borders.sf$crime.diff <-
-  # (borders.sf[[crime.rate]] - borders.sf[[paste(crime.rate, 1, sep = '.')]]) %>% abs
+#borders.sf$crime.diff <-
+# (borders.sf[[crime.rate]] - borders.sf[[paste(crime.rate, 1, sep = '.')]]) %>% abs
 
 borders.sf$sig.frontier <-
   ifelse(borders.sf$frontier == T &
@@ -197,31 +309,91 @@ borders.gfx <-
 
 
 ##  Permutation test (not necessary for frontiers)---------------
+
+
+
+
+
+
+#Use Nema's function
+source('Source/permutation_test.R')
+
+#debugonce(permutation.test)
+#Ah yes, London is very large! Let's try 100 to start with.
+ec_act.test <- permutation.test(variates=merged.sf$crimesperperson,W0=W,W1=W.estimated, iter=100)
+
+ec_act.test$pvalue
+
+plot(density(ec_act.test$all.diff),main="",lwd=1.5,lty="dashed")
+abline(v=ec_act.test$all.diff[1],lwd=2)
+
+#Why this one different value? That matches the actual value? Err.
+ec_act.test$all.diff[ec_act.test$all.diff > 0.02]
+
+
+#And for unemployment?
+ec_act.test.ea <- permutation.test(variates=merged.sf$percentunemployed,W0=W,W1=W.estimated, iter=100)
+
+#Err. exactly same value. 
+ec_act.test.ea$pvalue
+
+#Consistently negative differences...?
+plot(density(ec_act.test.ea$all.diff),main="",lwd=1.5,lty="dashed")
+abline(v=ec_act.test.ea$all.diff[1],lwd=2)
+
+
+
+
+
+
+
 ##  Basically we are comparing mean diff in crime rates between frontiers and
 ##  non-frontiers if the two groups had no diff (i.e. they were assigned at random)
 ##  Then we compare our real diff to get the correct p values
 #  This is not how I would do it but it's more right than what I would have done
 #  so revisit this
-# iter <- 10000
-# null.dist <- rep(NA, iter)
-# 
-# 
-# frontier.n <- sum(borders.sf$sig.frontier)
-# for (i in 1:iter) {
-#   draws <-
-#     sample.int(borders.sf %>% nrow, size = frontier.n, replace = F)
-#   null.dist[i] <-
-#     mean(borders.sf$crime.diff[draws]) - mean(borders.sf$crime.diff[-draws])
-# }
-# 
-# null.dist %>% summary #right so should be zero
-# ##  p values for getting the actual data
-# real.diff <-
-#   mean(borders.sf$crime.diff[borders.sf$sig.frontier == T]) - mean(borders.sf$crime.diff[borders.sf$sig.frontier == F])
-# all.diff <- c(real.diff, null.dist)
-# rank <- rank(all.diff)[1] #selects rank
-# pval <- punif((iter - rank + 2) / (iter + 1))
-# 
+
+#Find absolute contiguous differences
+borders.sf <- borders.sf %>%
+  mutate(diff = abs(crimesperperson - crimesperperson.1))
+
+borders.sf <- borders.sf %>%
+  mutate(diff = abs(percentunemployed - percentunemployed.1))
+
+iter <- 10000
+null.dist <- rep(NA, iter)
+
+frontier.n <- sum(borders.sf$sig.frontier)
+for (i in 1:iter) {
+  draws <-
+    sample.int(borders.sf %>% nrow, size = frontier.n, replace = F)
+  null.dist[i] <-
+    mean(borders.sf$diff[draws]) - mean(borders.sf$diff[-draws])
+}
+
+null.dist %>% summary #right so should be zero
+##  p values for getting the actual data
+real.diff <-
+  mean(borders.sf$diff[borders.sf$sig.frontier == T]) - mean(borders.sf$diff[borders.sf$sig.frontier == F])
+all.diff <- c(real.diff, null.dist)
+rank <- rank(all.diff)[1] #selects rank
+pval <- punif((iter - rank + 2) / (iter + 1))
+
+plot(density(null.dist),main="",lwd=1.5,lty="dashed")
+abline(v=real.diff,lwd=2)
+
+
+
+#On reflection, that seems like a strange test to me.
+#It seems intuitive there will be a higher absolute contiguous difference for any variable
+#between zones with a higher cliff edge of social difference
+#Isn't that just saying that the two things are correlating?
+
+#The interesting thing to find would be: is crime higher for both zones
+#Compared to random pairs of zones?
+#May have to scribble this.
+
+
 # ##  Two side p val?
 # ##  Saving the results into a list with important stuff-----
 # ##  data is the merged original bsu data
@@ -233,7 +405,7 @@ saved.frontiers <- list(
   data = merged.sf,
   frontier.gfx = borders.gfx,
   frontier.sf = borders.sf#,
-#  pval = pval
+  #  pval = pval
 )
 
 saveRDS(saved.frontiers, save.frontier.to)
