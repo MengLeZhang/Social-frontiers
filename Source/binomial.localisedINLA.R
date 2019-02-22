@@ -1,7 +1,16 @@
 #### Run a Binomial Localised spatial autoregressive model using INLA
 
-binomial.localisedINLA <- function(formula, W, Ntrials,fix.rho=FALSE, rho=NULL, prior.beta.mean=0, prior.beta.precision=0.001, prior.precision.shape=0.001, prior.precision.scale=0.001)
-{
+binomial.localisedINLA <-
+  function(formula,
+           W,
+           Ntrials,
+           fix.rho = FALSE,
+           rho = NULL,
+           prior.beta.mean = 0,
+           prior.beta.precision = 0.001,
+           prior.precision.shape = 0.001,
+           prior.precision.scale = 0.001)
+  {
   ##############################################
   #### Format the arguments and check for errors
   ##############################################
