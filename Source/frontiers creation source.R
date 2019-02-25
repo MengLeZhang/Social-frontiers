@@ -4,7 +4,10 @@
 ##  Load pkgs
 pkgs <- c('sf', 'tidyverse', 'tmap',
           'spdep',
+          # 'foreach',
+          # 'doParallel',
           'INLA')
+
 lapply(pkgs, library, character.only = T)
 
 
@@ -90,35 +93,34 @@ class(mod.inla) <- 'frontier_model' #changes it's class allowing for custom rout
 ##  Got rid of phi here -- no need to append
 
 ##  Step four: Exracting the frontiers and all boundaries for tests ----
+##  So we assume here that we have a model objects (mod.inla) and we are going to
+##  just try to extract frontiers and such like
 ##  Tried this :https://stackoverflow.com/questions/47760033/r-gis-identify-inner-borders-between-polygons-with-sf
 ##   but doesn't work as smoothly or really at all
 ##  But yet data %>% st_intersection can accomplish a similar end results (after we appened the frontier info)
 ##  Here we are doing the frontier info first and pairwise finding borders
 
-upper.w.est <- W.estimated
-upper.w.est[lower.tri(upper.w.est, diag = T)] <- NA ## gets rid of the upper part of the sym. matrix
-#upper.w.est %>% head
-
 # Now we want to find the pairs where there are 0 (frontiers) and 1 (non-frontier) in the estimated
 # inla matrix. = 
 w.index0 <-
-  which(upper.w.est == 0, arr.ind = T) %>% # finds non-NA values (which row and col) and arr.ind returns it as a matrix 
+  which(mod.inla$W.estimated_cleaned == 0, arr.ind = T) %>% # finds non-NA values (which row and col) and arr.ind returns it as a matrix 
   data.frame(frontier = T) # takes the table and turns it into data.frame and adds a row called frontier
 
 w.index1 <-
-  which(upper.w.est == 1, arr.ind = T) %>% 
+  which(mod.inla$W.estimated_cleaned == 1, arr.ind = T) %>% 
   data.frame(frontier = F) # finds non-NA values (which row and col) and arr.ind returns it as a matrix
 
 #One row for every unique neighbour pair, saying where frontier or not
 w.index <- w.index0 %>% rbind(w.index1) # I want all the indicies for social frontiers and non-frontiers in
 ## one data.frame
-w.index %>% head 
 
 
 #Attempt 2, create dataframe directly
 #rbind playing up for large list
-data.for.borders <- data %>% 
-  select(LSOA,percentunemployed,crimesperperson,mod_phi)
+data.for.borders <-
+  data %>%
+  mutate(phi = mod.inla$phi[['Median']]) %>%
+  select(LSOA, percentunemployed, crimesperperson, phi)
 
 
 #Avoiding the 2nd circle of growing df hell
@@ -127,7 +129,9 @@ data.for.borders <- data %>%
 #Pre-create it and update directly
 
 #Cheat: get column names from single intersect operation
-fornames <- data.for.borders[w.index$col[1],] %>% st_intersection(data.for.borders[w.index$col[1],]) # now we are intersecting polys to get borders
+fornames <- 
+  data.for.borders[w.index$col[1],] %>% 
+  st_intersection(data.for.borders[w.index$col[1],]) # now we are intersecting polys to get borders
 
 #Create df of correct size with those names
 borders.sf <- data.frame(id = 1:nrow(w.index))
@@ -232,6 +236,11 @@ for (i in 1:nrow(w.index)) {
 borders.sf$geometry %>% summary # not that it's not all proper lines
 borders.sf %>% head
 # end of making border.sf object that contains borders only for graphs etc
+
+
+
+
+
 
 #Save that and the INLA run
 saveRDS(borders.sf,'Data/local/london_borders_sf2.rds')
