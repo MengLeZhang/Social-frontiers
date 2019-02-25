@@ -87,6 +87,8 @@ mod.inla$W.estimated_cleaned[lower.tri(mod.inla$W.estimated_cleaned, diag = T)] 
 class(mod.inla) <- 'frontier_model' #changes it's class allowing for custom routines
 
 
+##  Got rid of phi here -- no need to append
+
 ##  Step four: Exracting the frontiers and all boundaries for tests ----
 ##  Tried this :https://stackoverflow.com/questions/47760033/r-gis-identify-inner-borders-between-polygons-with-sf
 ##   but doesn't work as smoothly or really at all
