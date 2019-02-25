@@ -7,25 +7,40 @@ pkgs <- c('sf', 'tidyverse', 'tmap',
           'INLA')
 lapply(pkgs, library, character.only = T)
 
-##  Load other soruce files -- we really ought to credit nema dean here
-source("./Source/binomial.localisedINLA.R") ## This needs to be loaded
 
-##  Section 1: We are expecting a merged.sf file to be defined elsewhere
+##  Suggested break down
+##  Input: formula, data, additiona arguments (i.e. n.trials)
+##  Output: Sf file frontiers and borders, INLA model outputs
+##  Suggestion: Brreak into 2 parts: Running the INLA model as a function
+##  and extract frontiers
+##  A) Outputs the original spatial continguity matrix and model related data?
+##  This is basically to save 
+
+
+### TEST version --- 
+threshold <- 1.96 
+data <- readRDS('Data/londondata_LSOA.rds')
+y <- 'nonUK' # Number of foreign
+n.trials <- 'totalPop' #total population (per zone?)
+###
+
+
+##  Section 1: We are expecting a data file to be defined elsewhere
 # So this is entirely for Iva's analysis's sake
-merged.sf$prop.foreign <- merged.sf[[y]] / merged.sf[[n.trials]] # prop.foreign is % foreign
-merged.sf$id_sf <- 1:nrow(merged.sf) #creating a consistent id variable
-(merged.sf[[y]] > merged.sf[[n.trials]]) %>% table # check if y is bigger than trials == prob encountered - shouldn't matter for london data
-#merged.sf$log.crime <- log(merged.sf[[crime.rate]] + 0.01) ## so greens are low
-merged.sf$log.prop <- log(merged.sf[["prop.foreign"]] + 0.01) # red = high
-merged.sf$log.pop <- log(merged.sf[[n.trials]] + 0.01)
+data$prop.foreign <- data[[y]] / data[[n.trials]] # prop.foreign is % foreign
+data$id_sf <- 1:nrow(data) #creating a consistent id variable
+(data[[y]] > data[[n.trials]]) %>% table # check if y is bigger than trials == prob encountered - shouldn't matter for london data
+#data$log.crime <- log(data[[crime.rate]] + 0.01) ## so greens are low
+data$log.prop <- log(data[["prop.foreign"]] + 0.01) # red = high
+data$log.pop <- log(data[[n.trials]] + 0.01)
 
 
 ##  Section 2: The routine for calculating frontiers ----
 
 ##  Creating the contiguity matrix
-W.nb <- poly2nb(merged.sf %>% as('Spatial'),
+W.nb <- poly2nb(data %>% as('Spatial'),
                 #queen = F,#more than just a single point touching to be neighbours
-                row.names = merged.sf$id_sf) #Sadly we have to convert the sf object to spatial dataframe using as() here
+                row.names = data$id_sf) #Sadly we have to convert the sf object to spatial dataframe using as() here
 
 #Check some neighbours look sensible
 #Summary will show table for number of neighbours
@@ -34,8 +49,8 @@ W.nb <- poly2nb(merged.sf %>% as('Spatial'),
 summary(W.nb)
 
 zonetolookat = 5381
-plot(st_geometry(merged.sf[W.nb[[zonetolookat]],]), col = 'blue')
-plot(st_geometry(merged.sf[zonetolookat,]), add = T, col = 'red')
+plot(st_geometry(data[W.nb[[zonetolookat]],]), col = 'blue')
+plot(st_geometry(data[zonetolookat,]), add = T, col = 'red')
 
 #Double-check/confirm whether we have any zones with no neighbours? No.
 table(unlist(W.nb) == 0)
@@ -46,53 +61,38 @@ W <- nb2mat(W.nb, style = "B") # B = binary
 
 # actual running inla routine
 # Time it... ~11 mins for London LSOAs
+source("./Source/binomial.localisedINLA.R") ## This needs to be loaded
 x <- proc.time()
 
 mod.inla <- binomial.localisedINLA(
-  formula = merged.sf[[y]] ~ 1,# y is variable name for number of foreigners
+  formula = data[[y]] ~ 1,# y is variable name for number of foreigners
   W = W,
-  Ntrials = merged.sf[[n.trials]],# how many lived in zone
+  Ntrials = data[[n.trials]],# how many lived in zone
   fix.rho = TRUE,
   rho = 0.99
 )
 
 proc.time() - x
 
-W.estimated <- mod.inla$W.estimated #extract estimated matrix
+##  Basically up to this point it ought to be self contained
+
+##  So the inla output is just a list not a proper class object..
+mod.inla$W.estimated_cleaned <- mod.inla$W.estimated #extract estimated matrix
 # So basically we are putting NAs where there was no neighbour in the original
 # W matrix. Remainder are geographical neighbours with 0s and 1s denoting
 # sig correlation or not
-W.estimated[W == 0] <- NA ## Put NAs where there was orginally not a border
+mod.inla$W.estimated_cleaned[W == 0] <- NA ## Put NAs where there was orginally not a border
+
+class(mod.inla) <- 'frontier_model' #changes it's class allowing for custom routines
+
+str(mod.inla)
 
 
-
-
-# Everything after the model is run is extracting the right stats
-##  This bit isn't essentialt it's just error checking
-# W is the original neighbour continguity matrix
-# mod.inla$W.estimated is the model estimated matrix
-W %>% table/2 ## Divide by two as matrix is symmetric, counts neighbours twice
-W.estimated %>% table/2 ## Number estimated 1s (i.e. stat sig frontiers)
-
-W.estimated %>% table(useNA = 'always') # mroe tables NA = no geo neighbour
-
-table(W)/2#unique neighbour pairs = 16978
-#Check W.estimated has equal number of 1s and 0s to W's 1s.
-table(W.estimated %in% c(0,1))/2#Tick.
-table(mod.inla$W.estimated, useNA = 'always')
-table(W.estimated, useNA = 'always')
-
-
-
-##  Extract the estimated random effects which tells us how much the BSU departs
-##  from the average prop of foreigners
-phi <- mod.inla$phi[, 1] %>% as.numeric
-merged.sf$mod_phi <- phi
 
 ##  Step four: Exracting the frontiers and all boundaries for tests ----
 ##  Tried this :https://stackoverflow.com/questions/47760033/r-gis-identify-inner-borders-between-polygons-with-sf
 ##   but doesn't work as smoothly or really at all
-##  But yet merged.sf %>% st_intersection can accomplish a similar end results (after we appened the frontier info)
+##  But yet data %>% st_intersection can accomplish a similar end results (after we appened the frontier info)
 ##  Here we are doing the frontier info first and pairwise finding borders
 
 upper.w.est <- W.estimated
@@ -117,7 +117,7 @@ w.index %>% head
 
 #Attempt 2, create dataframe directly
 #rbind playing up for large list
-merged.sf.for.borders <- merged.sf %>% 
+data.for.borders <- data %>% 
   select(LSOA,percentunemployed,crimesperperson,mod_phi)
 
 
@@ -127,7 +127,7 @@ merged.sf.for.borders <- merged.sf %>%
 #Pre-create it and update directly
 
 #Cheat: get column names from single intersect operation
-fornames <- merged.sf.for.borders[w.index$col[1],] %>% st_intersection(merged.sf.for.borders[w.index$col[1],]) # now we are intersecting polys to get borders
+fornames <- data.for.borders[w.index$col[1],] %>% st_intersection(data.for.borders[w.index$col[1],]) # now we are intersecting polys to get borders
 
 #Create df of correct size with those names
 borders.sf <- data.frame(id = 1:nrow(w.index))
@@ -151,7 +151,7 @@ for (i in 1:nrow(w.index)) {
   zone1 <- w.index$col[i]
   zone2 <- w.index$row[i]
   
-  borders.sf[i,] <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+  borders.sf[i,] <- data.for.borders[zone1,] %>% st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
   #borders.sf$frontier[i] <- w.index$frontier[i]
   
   if(i %% 10 == 0){
@@ -178,10 +178,10 @@ for (i in 1:nrow(w.index)) {
   
   #First row becomes sf dataframe we'll rbind to.
   if(i==1){
-    borders.sf <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+    borders.sf <- data.for.borders[zone1,] %>% st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
     borders.sf$frontier <- w.index$frontier[i]
   } else {
-    temp <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+    temp <- data.for.borders[zone1,] %>% st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
     temp$frontier <- w.index$frontier[i]
     borders.sf <- rbind(borders.sf,temp)
   }
@@ -204,15 +204,15 @@ proc.time() - x
 # who are neighbours and say if they are frontier or not
 borders.sf <- list()#Start empty...
 
-#Reduce merged.sf field numbers to reduce border file size.
-merged.sf.for.borders <- merged.sf %>% 
+#Reduce data field numbers to reduce border file size.
+data.for.borders <- data %>% 
   select(LSOA,percentunemployed,crimesperperson,mod_phi)
 
 for (i in 1:nrow(w.index)) {
   #i <- 1 # for testing
   zone1 <- w.index$col[i]
   zone2 <- w.index$row[i]
-  temp <- merged.sf.for.borders[zone1,] %>% st_intersection(merged.sf.for.borders[zone2,]) # now we are intersecting polys to get borders
+  temp <- data.for.borders[zone1,] %>% st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
   
   #Don't use empty intersections. Slight hack...
   # if(nrow(temp)!=0){
@@ -259,12 +259,12 @@ is.symmetric.matrix(mod.inla$W.estimated)#Yes. Doesn't work if NAs present.
 # st_geometry_type(borders.sf[i,])
 # 
 # #check on those polygons from the original
-# plot(merged.sf[borders.sf$id_sf[i],'UK'])
-# plot(merged.sf[borders.sf$id_sf.1[i],'UK'])
-# plot(merged.sf[c(borders.sf$id_sf[i],borders.sf$id_sf.1[i]),'UK'])
+# plot(data[borders.sf$id_sf[i],'UK'])
+# plot(data[borders.sf$id_sf.1[i],'UK'])
+# plot(data[c(borders.sf$id_sf[i],borders.sf$id_sf.1[i]),'UK'])
 # 
 # #But the intersect is producing something messy?
-# intz <- merged.sf[borders.sf$id_sf[i],] %>% st_intersection(merged.sf[borders.sf$id_sf.1[i],])
+# intz <- data[borders.sf$id_sf[i],] %>% st_intersection(data[borders.sf$id_sf.1[i],])
 # plot(intz[,'UK'])
 
 ##  Now to calculate differences in phi
@@ -320,7 +320,7 @@ source('Source/permutation_test.R')
 
 #debugonce(permutation.test)
 #Ah yes, London is very large! Let's try 100 to start with.
-ec_act.test <- permutation.test(variates=merged.sf$crimesperperson,W0=W,W1=W.estimated, iter=100)
+ec_act.test <- permutation.test(variates=data$crimesperperson,W0=W,W1=W.estimated, iter=100)
 
 ec_act.test$pvalue
 
@@ -332,7 +332,7 @@ ec_act.test$all.diff[ec_act.test$all.diff > 0.02]
 
 
 #And for unemployment?
-ec_act.test.ea <- permutation.test(variates=merged.sf$percentunemployed,W0=W,W1=W.estimated, iter=100)
+ec_act.test.ea <- permutation.test(variates=data$percentunemployed,W0=W,W1=W.estimated, iter=100)
 
 #Err. exactly same value. 
 ec_act.test.ea$pvalue
@@ -402,7 +402,7 @@ abline(v=real.diff,lwd=2)
 # ##  pval is the p valure of the permutation test for significant frontiers
 
 saved.frontiers <- list(
-  data = merged.sf,
+  data = data,
   frontier.gfx = borders.gfx,
   frontier.sf = borders.sf#,
   #  pval = pval
