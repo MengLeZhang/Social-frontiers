@@ -49,6 +49,7 @@ foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
 
 proc.time() - x
 ##  Results:
-##  SMI3 (6 cores/ 6 threads)
+##  SMI3 (6 cores/ 6 threads) : 5399 seconds - 89 minutes so not really faster
+##  Maybe not working?
 
 borders.sf %>% head
