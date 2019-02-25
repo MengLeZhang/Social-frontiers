@@ -6,7 +6,7 @@ summary.frontier_model <- function(object, ...){
   
   print('Total N. of borders')
   print(sum(borders.tab))
-  print('N. of borders: non-frontier vs frontier')
+  print('N. of borders: frontier vs non-frontier')
   print(borders.tab) 
   
   

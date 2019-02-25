@@ -83,13 +83,8 @@ mod.inla$W.estimated_cleaned <- mod.inla$W.estimated #extract estimated matrix
 # sig correlation or not
 mod.inla$W.estimated_cleaned[W == 0] <- -1 ## Put NAs where there was orginally not a border
 mod.inla$W.estimated_cleaned[lower.tri(mod.inla$W.estimated_cleaned, diag = T)] <- -1 ## gets rid of the upper part of the sym. matrix
-#upper.w.est %>% head
-
 
 class(mod.inla) <- 'frontier_model' #changes it's class allowing for custom routines
-
-str(mod.inla)
-
 
 
 ##  Step four: Exracting the frontiers and all boundaries for tests ----
