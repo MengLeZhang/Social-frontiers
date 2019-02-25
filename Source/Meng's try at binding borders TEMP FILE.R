@@ -6,20 +6,31 @@ library(foreach)
 library(doParallel)
 ## Assume we have a objects called data, w.index and mod.inla
 c('data', 'w.index', 'mod.inla') %in% ls() ## should all be true
+## Do it parallel?
 
+##  Step 1: Create a empty sf file with what we want
+data.for.borders <-
+  data %>%
+  mutate(phi = mod.inla$phi[['Median']]) %>%
+  select(LSOA, percentunemployed, crimesperperson, phi)
+
+##  Take 1 intersection to get names off
 fornames <- 
   data.for.borders[w.index$col[1],] %>% 
   st_intersection(data.for.borders[w.index$col[1],]) # now we are intersecting polys to get borders
-
 
 #Create df of correct size with those names
 borders.sf <- data.frame(1:ncol(fornames) %>%
                            rep(nrow(w.index)) %>% matrix(ncol = ncol(fornames)))
 names(borders.sf) <- names(fornames)
-borders.sf %>% head
 
+##  Make back into sf
 borders.sf <- st_as_sf(borders.sf, 
                        geometry = st_sfc(lapply(1:nrow(w.index), function(x) st_geometrycollection())))
+
+
+##  Step 2a: Do a for loop for the intersection
+x <- proc.time()
 
 foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
   #i <- 1 # for testing
@@ -36,4 +47,8 @@ foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
   
 }
 
-?foreach
+proc.time() - x
+##  Results:
+##  SMI3 (6 cores/ 6 threads)
+
+borders.sf %>% head

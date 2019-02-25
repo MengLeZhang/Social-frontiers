@@ -10,26 +10,20 @@ pkgs <- c('sf', 'tidyverse', 'tmap',
 
 lapply(pkgs, library, character.only = T)
 
-
 ##  Suggested break down
-##  Input: formula, data, additiona arguments (i.e. n.trials)
+##  Input: formula (or at least Y), data, additiona arguments (i.e. n.trials)
 ##  Output: Sf file frontiers and borders, INLA model outputs
 ##  Suggestion: Brreak into 2 parts: Running the INLA model as a function
 ##  and extract frontiers
-##  A) Outputs the original spatial continguity matrix and model related data?
-##  This is basically to save 
 
-
-### TEST version --- 
+### TEST version with files preloaded (delete in final) ------ 
 threshold <- 1.96 
 data <- readRDS('Data/londondata_LSOA.rds')
 y <- 'nonUK' # Number of foreign
 n.trials <- 'totalPop' #total population (per zone?)
 ###
 
-
-##  Section 1: We are expecting a data file to be defined elsewhere
-# So this is entirely for Iva's analysis's sake
+##  Other changes we want to make to the data but not necessary for routine
 data$prop.foreign <- data[[y]] / data[[n.trials]] # prop.foreign is % foreign
 data$id_sf <- 1:nrow(data) #creating a consistent id variable
 (data[[y]] > data[[n.trials]]) %>% table # check if y is bigger than trials == prob encountered - shouldn't matter for london data
@@ -38,7 +32,7 @@ data$log.prop <- log(data[["prop.foreign"]] + 0.01) # red = high
 data$log.pop <- log(data[[n.trials]] + 0.01)
 
 
-##  Section 2: The routine for calculating frontiers ----
+##  A: The routine for calculating frontiers ----
 
 ##  Creating the contiguity matrix
 W.nb <- poly2nb(data %>% as('Spatial'),
@@ -65,6 +59,8 @@ W <- nb2mat(W.nb, style = "B") # B = binary
 # actual running inla routine
 # Time it... ~11 mins for London LSOAs
 source("./Source/binomial.localisedINLA.R") ## This needs to be loaded
+source('./Source/summary_frontier_model.R') #custom script for treating the inla output; load in functions
+
 x <- proc.time()
 
 mod.inla <- binomial.localisedINLA(
@@ -77,7 +73,14 @@ mod.inla <- binomial.localisedINLA(
 
 proc.time() - x
 
-##  Basically up to this point it ought to be self contained
+##  Timing results 
+##  Meng's work laptop: 660 secs or so (i5 2 core/ 4 thread) w/ Microsoft R
+##  Smi3 VM: ridiculously slow for some reason: 1235 secs so yikes - INLA may be messed up here
+
+
+
+## A: Assigning the mod.inla output into a custom call and fixing up the data -----
+##  
 
 ##  So the inla output is just a list not a proper class object..
 mod.inla$W.estimated_cleaned <- mod.inla$W.estimated #extract estimated matrix
@@ -92,7 +95,7 @@ class(mod.inla) <- 'frontier_model' #changes it's class allowing for custom rout
 
 ##  Got rid of phi here -- no need to append
 
-##  Step four: Exracting the frontiers and all boundaries for tests ----
+##  B: Exracting the frontiers and all boundaries for tests ----
 ##  So we assume here that we have a model objects (mod.inla) and we are going to
 ##  just try to extract frontiers and such like
 ##  Tried this :https://stackoverflow.com/questions/47760033/r-gis-identify-inner-borders-between-polygons-with-sf
@@ -115,6 +118,10 @@ w.index <- w.index0 %>% rbind(w.index1) # I want all the indicies for social fro
 ## one data.frame
 
 
+##  B: Meng's new rbind attempt ----
+#source("Meng's try at binding borders TEMP FILE.R") #check this file
+
+##  B: Dan and old Meng code for rbind ----
 #Attempt 2, create dataframe directly
 #rbind playing up for large list
 data.for.borders <-
