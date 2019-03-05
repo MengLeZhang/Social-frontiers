@@ -93,6 +93,13 @@ inla_frontier <- function(y, data, n.trials, queen = F, ...){
 #saveRDS(mod.inla, 'temp junk/Output of inla_frontier.RDS')
 summary(mod.inla)
 
+data <- readRDS('Data/londondata_LSOA.rds')
+y <- 'nonUK' # Number of foreign
+n.trials <- 'totalPop' #total population (per zone?)
+###
+
+inla_frontier(data = data[1:100, ], y = 'nonUK', n.trials = 'totalPop')
+
 
 ##  To include in summary
 tabulate(W) / 2
