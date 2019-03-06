@@ -32,6 +32,13 @@ borders.sf <- st_as_sf(borders.sf,
 ##  Step 2a: Do a for loop for the intersection
 x <- proc.time()
 
+
+##  SUPER VITAL STEP: We must register the clusters:
+detectCores()
+registerDoParallel(detectCores() - 1) #use all but 1
+
+x <- proc.time()
+
 foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
   #i <- 1 # for testing
   zone1 <- w.index$col[i]
@@ -46,6 +53,8 @@ foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
   }
   
 }
+proc.time() - x
+
 
 proc.time() - x
 ##  Results:
@@ -53,3 +62,5 @@ proc.time() - x
 ##  Maybe not working?
 
 borders.sf %>% head
+
+stopImplicitCluster()
