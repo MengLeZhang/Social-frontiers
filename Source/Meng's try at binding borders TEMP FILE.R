@@ -21,6 +21,11 @@ borders.sf %>% head
 borders.sf <- st_as_sf(borders.sf, 
                        geometry = st_sfc(lapply(1:nrow(w.index), function(x) st_geometrycollection())))
 
+##  SUPER VITAL STEP: We must register the clusters:
+detectCores()
+registerDoParallel(detectCores() - 1) #use all but 1
+
+x <- proc.time()
 foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
   #i <- 1 # for testing
   zone1 <- w.index$col[i]
@@ -35,5 +40,6 @@ foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
   }
   
 }
+proc.time() - x
 
-?foreach
+stopImplicitCluster()
