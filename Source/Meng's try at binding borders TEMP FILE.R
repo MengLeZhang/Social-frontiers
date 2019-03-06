@@ -40,7 +40,7 @@ saved.sf <-
   temp <- data.for.borders[zone1,] %>% 
     st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
   
-  st_geometry(temp)
+  st_geometry(temp) #this is what is actually saved -- just the geometry
   }
 
 proc.time() - x
@@ -55,7 +55,7 @@ system.time(
 test %>% head
 test[1:100] %>% plot
 
-##  Done!
+##  Done! just then use this geometry vector elsewhere
 
 
 ##  Other test results -- using worse methods
