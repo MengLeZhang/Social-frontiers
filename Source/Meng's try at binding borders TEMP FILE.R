@@ -4,9 +4,12 @@
 
 library(foreach)
 library(doParallel)
+
 ## Assume we have a objects called data, w.index and mod.inla
 c('data', 'w.index', 'mod.inla') %in% ls() ## should all be true
 ## Do it parallel?
+
+
 
 ##  Step 1: Create a empty sf file with what we want
 data.for.borders <-
@@ -30,37 +33,44 @@ borders.sf <- st_as_sf(borders.sf,
 
 
 ##  Step 2a: Do a for loop for the intersection
-x <- proc.time()
-
-
 ##  SUPER VITAL STEP: We must register the clusters:
 detectCores()
 registerDoParallel(detectCores() - 1) #use all but 1
+## on vm its 5
+
 
 x <- proc.time()
 
-foreach (i=1:nrow(w.index), .combine = rbind) %dopar% {
+saved.sf <- 
+  foreach (i=1:nrow(w.index) #,.combine = rbind
+           ) %dopar% {
   #i <- 1 # for testing
+  
+  library(sf)
+  library(tidyverse)
+  
   zone1 <- w.index$col[i]
   zone2 <- w.index$row[i]
   
-  borders.sf[i,] <- data.for.borders[zone1,] %>% 
-    st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
+  ##  Some reason doesn't work -- in parallel but does in single --
+  # borders.sf[i,] <- data.for.borders[zone1,] %>% 
+  #   st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
   #borders.sf$frontier[i] <- w.index$frontier[i]
   
-  if(i %% 10 == 0){
-    print(i)
+  data.for.borders[zone1,] %>% 
+    st_intersection(data.for.borders[zone2,]) # now we are intersecting polys to get borders
   }
-  
-}
-proc.time() - x
-
 
 proc.time() - x
+stopImplicitCluster()
+#
+
+## http://www.win-vector.com/blog/2015/07/efficient-accumulation-in-r/ ## so best would be to assign?
 ##  Results:
-##  SMI3 (6 cores/ 6 threads) : 5399 seconds - 89 minutes so not really faster
-##  Maybe not working?
+##  SMI3 (6 cores/ 6 threads: 2.00ghz) 
+##  No parallel: 5399 seconds - 89 minutes -- 
+##  5 threads: 3406 sec -- 56 min --- faster but not huge (w/ .combine = rbind)
 
 borders.sf %>% head
 
-stopImplicitCluster()
+?foreach
