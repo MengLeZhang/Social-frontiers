@@ -38,7 +38,6 @@ detectCores()
 registerDoParallel(detectCores() - 1) #use all but 1
 ## on vm its 5
 
-
 x <- proc.time()
 
 saved.sf <- 
@@ -70,6 +69,7 @@ stopImplicitCluster()
 ##  SMI3 (6 cores/ 6 threads: 2.00ghz) 
 ##  No parallel: 5399 seconds - 89 minutes -- 
 ##  5 threads: 3406 sec -- 56 min --- faster but not huge (w/ .combine = rbind)
+##  5 thread (same as above but no rbind): 88 sec!!! So huge -- now we have a list
 
 borders.sf %>% head
 
