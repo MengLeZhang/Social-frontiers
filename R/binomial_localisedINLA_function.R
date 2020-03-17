@@ -1,4 +1,5 @@
 #' Run a Binomial Localised spatial autoregressive model using INLA
+#' @import INLA
 
 binomial_localisedINLA <-
   function(formula,
